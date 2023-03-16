@@ -18,7 +18,7 @@ from .utils.amqp import consume, publish
 LOG = logging.getLogger(__name__)
 
 
-def save_file_to_db(correlation_id, data):
+def save_file_to_db(correlation_id, data, mountpoint):
     filepath = data['filepath']
     username = data['user']
     accession_id = data['accession_id']
@@ -40,35 +40,60 @@ def save_file_to_db(correlation_id, data):
         encrypted_checksum = c['value']
         encrypted_checksum_type = c['type'].upper()
 
+    relative_path = None
+    if paths[0].startswith(mountpoint):
+        relative_path = paths[0][len(mountpoint):]
+
     # Save to DB
     # Here we use an example DB. Each LocalEGA can implement their own schema
     # and update the query below
     with db.connection.cursor() as cur:
-        cur.execute('''INSERT INTO local_ega.main (correlation_id,inbox_user,inbox_path,
-                                                   inbox_path_encrypted_checksum,
-                                                   inbox_path_encrypted_checksum_type,
-                                                   inbox_path_size,header,payload_size,
-                                                   payload_checksum, decrypted_checksum, accession_id,
-                                                   payload_path, payload_path2) 
-                           VALUES (%(correlation_id)s,%(inbox_user)s,%(inbox_path)s,
-                                   %(enc_cs)s,%(enc_cs_t)s,%(inbox_path_size)s,
-                                   %(header)s,%(payload_size)s,%(payload_cs)s,
-                                   %(decrypted_cs)s,%(accession_id)s,%(payload_path)s,%(payload_path2)s)
-                           ON CONFLICT DO NOTHING;''', # in case we insert the same accession_id, cuz we have the same content
-                    {'correlation_id': correlation_id,
-                     'inbox_user': username,
-                     'inbox_path': filepath,
-                     'enc_cs': encrypted_checksum,
-                     'enc_cs_t': encrypted_checksum_type,
-                     'inbox_path_size': data.get('filesize'),
-                     'header': data['header'],
-                     'payload_size': data['target_size'],
-                     'payload_cs': data['payload_checksum']['value'],
-                     'decrypted_cs': get_sha256(decrypted_checksums),
-                     'accession_id': data['accession_id'],
-                     'payload_path': 'file://' + paths[0],
-                     'payload_path2': 'file://' + paths[1],
+        cur.execute(''' 
+            SELECT public.upsert_file(
+                                    %(correlation_id)s,%(inbox_user)s,%(inbox_path)s,
+                                    %(enc_cs)s,%(enc_cs_t)s,%(filesize)s,
+                                    %(header)s,%(payload_cs)s,
+                                    %(decrypted_cs)s,%(accession_id)s,%(relative_path)s
+                           );''',
+                    {
+                        'correlation_id': correlation_id,
+                        'inbox_user': username,
+                        'inbox_path': filepath,
+                        'enc_cs': encrypted_checksum,
+                        'enc_cs_t': encrypted_checksum_type,
+                        'filesize': data.get('filesize'),
+                        'header': data['header'],
+                        'payload_cs': data['payload_checksum']['value'],
+                        'decrypted_cs': get_sha256(decrypted_checksums),
+                        'accession_id': data['accession_id'],
+                        'relative_path': relative_path,
                     })
+#    with db.connection.cursor() as cur:
+#        cur.execute('''INSERT INTO local_ega.main (correlation_id,inbox_user,inbox_path,
+#                                                   inbox_path_encrypted_checksum,
+#                                                   inbox_path_encrypted_checksum_type,
+#                                                   inbox_path_size,header,payload_size,
+#                                                   payload_checksum, decrypted_checksum, accession_id,
+#                                                   payload_path, payload_path2) 
+#                           VALUES (%(correlation_id)s,%(inbox_user)s,%(inbox_path)s,
+#                                   %(enc_cs)s,%(enc_cs_t)s,%(inbox_path_size)s,
+#                                   %(header)s,%(payload_size)s,%(payload_cs)s,
+#                                   %(decrypted_cs)s,%(accession_id)s,%(payload_path)s,%(payload_path2)s)
+#                           ON CONFLICT DO NOTHING;''', # in case we insert the same accession_id, cuz we have the same content
+#                    {'correlation_id': correlation_id,
+#                     'inbox_user': username,
+#                     'inbox_path': filepath,
+#                     'enc_cs': encrypted_checksum,
+#                     'enc_cs_t': encrypted_checksum_type,
+#                     'inbox_path_size': data.get('filesize'),
+#                     'header': data['header'],
+#                     'payload_size': data['target_size'],
+#                     'payload_cs': data['payload_checksum']['value'],
+#                     'decrypted_cs': get_sha256(decrypted_checksums),
+#                     'accession_id': data['accession_id'],
+#                     'payload_path': 'file://' + paths[0],
+#                     'payload_path2': 'file://' + paths[1],
+#                    })
 
 def save_mapping_to_db(correlation_id, data):
     dataset_id = data['dataset_id']
@@ -87,7 +112,7 @@ def save_mapping_to_db(correlation_id, data):
                      })
         
 
-def work(data):
+def work(mountpoint, data):
 
     LOG.info('Working on %s', data)
 
@@ -100,7 +125,7 @@ def work(data):
 
     if job_type == 'accession':
         LOG.info('Receiving an ingestion command (correlation_id %s)', correlation_id)
-        save_file_to_db(correlation_id, data)
+        save_file_to_db(correlation_id, data, mountpoint)
         clean_message(data)
         publish(data)  # will publish to cega, use the same correlation_id
         return
@@ -116,4 +141,12 @@ def work(data):
 
 
 def main():
+
+    # Loading the key from its storage (be it from file, or from a remote location)
+    # the key_config section in the config file should describe how
+    # We don't use default values: bark if not supplied
+    mountpoint = CONF.get('vault', 'mountpoint') # not raw
+
+    do_work = partial(work, mountpoint)
+
     consume(work)

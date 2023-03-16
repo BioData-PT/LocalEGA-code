@@ -34,7 +34,6 @@ def main(cega_conf, conf, args):
             'private-db': None,
         },
         'volumes': { # Use the default driver for volume creation
-            'archive-db': None,
             'inbox': None,
             'archive': None,
         }
@@ -42,33 +41,33 @@ def main(cega_conf, conf, args):
 
 
     lega['services'] = {
-        'archive-db': {
-            'build': '../../ingestion/db',
-            'environment': [
-                'DB_PASSWORD='+conf.get('archive-db', 'password'),
-                'PGDATA=/ega/data',
-                'PG_SERVER_CERT=/etc/ega/pg.cert',
-                'PG_SERVER_KEY=/etc/ega/pg.key',
-                'PG_CA=/etc/ega/CA.cert',
-                'PG_VERIFY_PEER=1',
-            ],
-            'hostname': f'archive-db{HOSTNAME_DOMAIN}',
-            'container_name': f'archive-db{HOSTNAME_DOMAIN}',
-            'image': 'egarchive/lega-db:latest',
-            'volumes': [
-                'archive-db:/ega/data',
-                '../../ingestion/db/archive-db.sql:/etc/ega/db.sql', # booting 
-                './certs/archive-db.cert.pem:/etc/ega/pg.cert',
-                './certs/archive-db.sec.pem:/etc/ega/pg.key',
-                './certs/CA.archive-db.cert.pem:/etc/ega/CA.cert',
-            ],
-            'ports': [
-                conf.get('docker-ports','archive-db')+":5432"
-            ],
-            'networks': [
-                'private-db',
-            ],
-        },
+        # 'archive-db': {
+        #     'build': '../../ingestion/db',
+        #     'environment': [
+        #         'DB_PASSWORD='+conf.get('archive-db', 'password'),
+        #         'PGDATA=/ega/data',
+        #         'PG_SERVER_CERT=/etc/ega/pg.cert',
+        #         'PG_SERVER_KEY=/etc/ega/pg.key',
+        #         'PG_CA=/etc/ega/CA.cert',
+        #         'PG_VERIFY_PEER=1',
+        #     ],
+        #     'hostname': f'archive-db{HOSTNAME_DOMAIN}',
+        #     'container_name': f'archive-db{HOSTNAME_DOMAIN}',
+        #     'image': 'egarchive/lega-db:latest',
+        #     'volumes': [
+        #         'archive-db:/ega/data',
+        #         '../../ingestion/db/archive-db.sql:/etc/ega/db.sql', # booting 
+        #         './certs/archive-db.cert.pem:/etc/ega/pg.cert',
+        #         './certs/archive-db.sec.pem:/etc/ega/pg.key',
+        #         './certs/CA.archive-db.cert.pem:/etc/ega/CA.cert',
+        #     ],
+        #     'ports': [
+        #         conf.get('docker-ports','archive-db')+":5432"
+        #     ],
+        #     'networks': [
+        #         'private-db',
+        #     ],
+        # },
         'inbox': {
             'hostname': f'inbox{HOSTNAME_DOMAIN}',
             'depends_on': [

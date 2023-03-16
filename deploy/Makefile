@@ -61,7 +61,8 @@ images: image mq-image db-image
 image:
 	cd ../ingestion && \
 	docker build -f Dockerfile \
-		     --build-arg LEGA_UID=$(shell id -u) \
+		     --build-arg LEGA_UID=$(shell id -u lega) \
+		     --build-arg LEGA_GID=$(shell id -g lega) \
 		     $(IMAGE_ARGS) \
 		     --tag egarchive/lega-base:latest \
 		     .

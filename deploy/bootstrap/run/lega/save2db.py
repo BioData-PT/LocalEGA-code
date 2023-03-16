@@ -56,6 +56,10 @@ def main(conf, args):
         'try_interval': 1,
     }
 
+    config['vault'] = {
+        'mountpoint': '/ega/vault',
+    }
+
     # output
     config.write(sys.stdout)
 
