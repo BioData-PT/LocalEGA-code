@@ -4,6 +4,9 @@ SELECTED=
 HOSTNAME_DOMAIN=
 #HOSTNAME_DOMAIN=.localega
 
+#export DOCKER_COMPOSE=docker compose # new version of docker
+export DOCKER_COMPOSE=docker-compose # old version of docker
+
 .PHONY: up down clean ps clean-volumes clean-all images erase purge preflight-check
 
 lega-up: SELECTED=inbox ingest cleanup db backup1 backup2 save2db archive-db mq dispatcher
